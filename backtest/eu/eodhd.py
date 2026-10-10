@@ -102,6 +102,20 @@ def fondamentaux(code: str) -> tuple[int, object]:
     return _get(f"/fundamentals/{code}")
 
 
+def barres(corps: object) -> tuple[list, str]:
+    """Extrait les barres d'une réponse EOD, ou le warning EODHD le cas échéant.
+
+    Sur abonnement gratuit, un radié — et toute demande au-delà d'un an — renvoie
+    `[{"warning": "..."}]` au lieu des barres : on le capte au lieu de planter.
+    """
+    if isinstance(corps, list) and corps and isinstance(corps[0], dict):
+        if "date" in corps[0]:
+            return corps, ""
+        if "warning" in corps[0]:
+            return [], str(corps[0]["warning"])
+    return [], ""
+
+
 def capitalisations(codes: list[str]) -> dict[str, float | None]:
     """Capitalisation par code `CODE.EXCH`, en cache. None si indisponible.
 
@@ -199,9 +213,10 @@ def _un_ticker(info: dict) -> tuple[str, object]:
         if code == 429:
             time.sleep(2 ** essai * 3)
             continue
-        if code != 200 or not isinstance(corps, list) or not corps:
-            return info["ticker"], f"http_{code}"
-        d = en_cadre(corps, info)
+        bars, warn = barres(corps)
+        if code != 200 or not bars:
+            return info["ticker"], (warn[:40] or f"http_{code}")
+        d = en_cadre(bars, info)
         if d.empty:
             return info["ticker"], "vide"
         d, _ = tronquer_flatline(d)
@@ -294,17 +309,16 @@ def verifier_radies(pause: float = 0.8) -> pd.DataFrame:
 
     lignes = []
     for code, genre in sequence:
-        c, corps = eod(code)
-        n = len(corps) if isinstance(corps, list) else 0
-        d1 = d2 = ""
-        if n:
-            d1, d2 = corps[0]["date"][:10], corps[-1]["date"][:10]
+        c, corps = eod(code, debut="2005-01-01")
+        bars, warn = barres(corps)
+        n = len(bars)
+        d1, d2 = (bars[0]["date"][:10], bars[-1]["date"][:10]) if n else ("", "")
         lignes.append({"code": code, "genre": genre, "http": c, "seances": n,
-                       "debut": d1, "fin": d2,
-                       "attendu": RADIES_EU.get(code, ("", ""))[0],
+                       "debut": d1, "fin": d2, "warning": warn,
                        "note": RADIES_EU.get(code, ("", ""))[1]})
-        print(f"  {code:<10} {genre:<7} http={c:<4} {n:>6} séances  {d1} -> {d2}",
-              flush=True)
+        suff = f"  !! {warn}" if warn else ""
+        print(f"  {code:<10} {genre:<7} http={c:<4} {n:>6} séances  "
+              f"{d1} -> {d2}{suff}", flush=True)
         time.sleep(pause)
     return pd.DataFrame(lignes)
 
@@ -343,13 +357,20 @@ def main() -> None:
     print("\n" + "=" * 78)
     v, m = r[r["genre"] == "vivant"], r[r["genre"] == "radié"]
     ok_v, ok_m = (v["seances"] > 100).sum(), (m["seances"] > 100).sum()
+    gratuit = r["warning"].str.contains("free subscription", case=False, na=False).any()
+    sv = r.loc[r["seances"] > 0, "debut"]
     print(f"témoins vivants servis : {ok_v}/{len(v)}")
     print(f"radiés servis          : {ok_m}/{len(m)}")
-    if ok_v < len(v):
+    if len(sv):
+        print(f"historique le plus ancien servi : {sv.min()}")
+    if gratuit:
+        print("\n!! ABONNEMENT GRATUIT détecté (warning EODHD) : historique borné à ~1 an")
+        print("!! et radiés NON servis. Inexploitable pour un backtest long sans biais de")
+        print("!! survivance. Il faut un plan payant (historique long + radiés). STOP.")
+    elif ok_v < len(v):
         print("\n!! Des témoins VIVANTS échouent : canal/clé en cause. Ne rien conclure.")
     elif ok_m == 0:
-        print("\n!! Canal sain, zéro radié servi : EODHD ne couvre pas les radiés EU ici.")
-        print("!! STOP — revoir la source avant toute collecte (cf. plan, gate).")
+        print("\n!! Canal sain, zéro radié servi : EODHD ne couvre pas les radiés EU ici. STOP.")
     else:
         print(f"\nCouverture des radiés CONFIRMÉE sur {ok_m} noms, canal sain.")
         print("Le biais de survivance devient corrigeable — collecte possible (--charger).")
