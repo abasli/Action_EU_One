@@ -63,6 +63,12 @@ def en_matrices(panel: pd.DataFrame) -> dict[str, pd.DataFrame]:
     for col in ("adj_close", "close", "volume"):
         m[col] = panel.pivot(index="date", columns="ticker", values=col).sort_index()
     m["rdt"] = m["adj_close"].pct_change()
+    # Garde-fou données (EU) : un rendement journalier > 100 % sur une large/mid
+    # cap est quasi toujours une erreur de tick ou d'ajustement (reverse split,
+    # prix corrompu). On le neutralise en NaN (donc exclu, PAS compté comme 0) —
+    # sinon la queue extrême, qui sélectionne justement les plus gros mouvements,
+    # se remplit de ces aberrations. Les prix <= 0 sont déjà écartés en amont.
+    m["rdt"] = m["rdt"].where(m["rdt"].abs() <= 1.0)
     m["dollar_vol"] = m["close"] * m["volume"]
     return m
 

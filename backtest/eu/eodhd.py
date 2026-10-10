@@ -263,19 +263,34 @@ def collecter(annuaire: pd.DataFrame, par_lot: int = 300, fils: int = 8) -> None
                   f"reste ~{ecoule / n * (len(lots) - n) / 60:.0f} min", flush=True)
 
 
-def charger_panel(min_seances: int = 500) -> pd.DataFrame:
-    """Recolle les lots en un panel long, biais de survivance traité."""
+def charger_panel(min_seances: int = 500,
+                  devises: tuple[str, ...] = ("EUR",)) -> pd.DataFrame:
+    """Recolle les lots en un panel long, biais de survivance traité + hygiène v1.
+
+    Hygiène de données (v1), motivée empiriquement sur le panel EODHD :
+    - **une seule devise** (`EUR` par défaut) : évite de mélanger GBX (pence
+      londonien), CHF, SEK, DKK, NOK, dont les échelles rendent incohérents le
+      filtre de liquidité et le plancher de prix, et dispense de toute conversion
+      FX. L'univers v1 est donc la zone euro (Paris, XETRA, Amsterdam, Bruxelles,
+      Madrid, Lisbonne, Vienne, Irlande) — encore des centaines de large/mid caps.
+      Élargir à Londres/Suisse/Nordiques = raffinement FX ultérieur.
+    - **prix strictement positifs** : un `adj_close`/`close` <= 0 fait exploser
+      `pct_change` (rendements `inf` / milliards de %). ~6 000 cellules concernées.
+    """
     fichiers = sorted(DOSSIER.glob("lot_*.parquet"))
     if not fichiers:
         raise FileNotFoundError(f"aucun lot dans {DOSSIER} — lancer --charger")
     p = pd.concat([pd.read_parquet(f) for f in fichiers], ignore_index=True)
     p["date"] = pd.to_datetime(p["date"])
     p = p.dropna(subset=["adj_close"])
+    p = p[p["currency"].isin(devises)]
+    p = p[(p["adj_close"] > 0) & (p["close"] > 0)]
     p = p.drop_duplicates(["ticker", "date"])
     p = decouper_trous(p)
     p = p[p.groupby("ticker")["date"].transform("size") >= min_seances]
     p.attrs["survivants_seulement"] = False
-    p.attrs["source"] = "eodhd (radiés servis, flatline tronquée, devise locale)"
+    p.attrs["source"] = (f"eodhd (radiés servis, flatline tronquée, "
+                         f"devises={'+'.join(devises)}, prix>0)")
     return p.sort_values(["ticker", "date"]).reset_index(drop=True)
 
 
