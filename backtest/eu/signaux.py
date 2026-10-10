@@ -60,16 +60,28 @@ N_DECILES = 10
 def en_matrices(panel: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """Passe du panel long à des matrices date x ticker (le format de travail)."""
     m = {}
-    for col in ("adj_close", "close", "volume"):
-        m[col] = panel.pivot(index="date", columns="ticker", values=col).sort_index()
+    m["adj_close"] = panel.pivot(index="date", columns="ticker",
+                                 values="adj_close").sort_index()
+    m["volume"] = panel.pivot(index="date", columns="ticker",
+                              values="volume").sort_index()
+    # prix et liquidité en EUR si le panel les fournit (multi-devises, cf. eodhd),
+    # sinon valeurs locales : plancher de prix et filtre de liquidité portent alors
+    # sur des montants comparables entre places.
+    prix = "prix_eur" if "prix_eur" in panel.columns else "close"
+    m["close"] = panel.pivot(index="date", columns="ticker", values=prix).sort_index()
+    if "dvol_eur" in panel.columns:
+        m["dollar_vol"] = panel.pivot(index="date", columns="ticker",
+                                      values="dvol_eur").sort_index()
+    else:
+        m["dollar_vol"] = m["close"] * m["volume"]
+
     m["rdt"] = m["adj_close"].pct_change()
     # Garde-fou données (EU) : un rendement journalier > 100 % sur une large/mid
-    # cap est quasi toujours une erreur de tick ou d'ajustement (reverse split,
-    # prix corrompu). On le neutralise en NaN (donc exclu, PAS compté comme 0) —
-    # sinon la queue extrême, qui sélectionne justement les plus gros mouvements,
-    # se remplit de ces aberrations. Les prix <= 0 sont déjà écartés en amont.
+    # cap est quasi toujours une erreur de tick / d'ajustement (reverse split,
+    # prix corrompu). On le neutralise en NaN (exclu, PAS compté 0) — sinon la
+    # queue extrême, qui sélectionne les plus gros mouvements, se remplit de ces
+    # aberrations. Les prix <= 0 sont déjà écartés en amont.
     m["rdt"] = m["rdt"].where(m["rdt"].abs() <= 1.0)
-    m["dollar_vol"] = m["close"] * m["volume"]
     return m
 
 

@@ -263,19 +263,48 @@ def collecter(annuaire: pd.DataFrame, par_lot: int = 300, fils: int = 8) -> None
                   f"reste ~{ecoule / n * (len(lots) - n) / 60:.0f} min", flush=True)
 
 
-def charger_panel(min_seances: int = 500,
-                  devises: tuple[str, ...] = ("EUR",)) -> pd.DataFrame:
-    """Recolle les lots en un panel long, biais de survivance traité + hygiène v1.
+# Devises européennes converties en EUR (v2, extension largeur). USD/HKD exclus
+# (cross-listings, pas des actions européennes). GBX = pence londonien = GBP/100.
+TARGET_DEVISES = ("EUR", "GBX", "GBP", "CHF", "SEK", "DKK", "NOK")
 
-    Hygiène de données (v1), motivée empiriquement sur le panel EODHD :
-    - **une seule devise** (`EUR` par défaut) : évite de mélanger GBX (pence
-      londonien), CHF, SEK, DKK, NOK, dont les échelles rendent incohérents le
-      filtre de liquidité et le plancher de prix, et dispense de toute conversion
-      FX. L'univers v1 est donc la zone euro (Paris, XETRA, Amsterdam, Bruxelles,
-      Madrid, Lisbonne, Vienne, Irlande) — encore des centaines de large/mid caps.
-      Élargir à Londres/Suisse/Nordiques = raffinement FX ultérieur.
+
+def taux_change(devises, debut: str = DEBUT) -> pd.DataFrame:
+    """Taux journaliers EUR par unité de devise (colonnes = devise, index = date).
+
+    EUR = 1. GBX (pence) = taux GBP / 100. Source EODHD `/eod/{CUR}EUR.FOREX`.
+    Sert à convertir PRIX et LIQUIDITÉ en EUR pour des filtres cohérents entre
+    places ; les RENDEMENTS restent en devise locale (le signal est relatif).
+    """
+    via = {"GBX": "GBP"}
+    cols = {}
+    for dev in {d for d in devises if d != "EUR"}:
+        c, corps = eod(f"{via.get(dev, dev)}EUR.FOREX", debut=debut)
+        b, _ = barres(corps)
+        if not b:
+            print(f"  FX {dev}: indisponible (http={c}) — devise ignorée")
+            continue
+        s = pd.Series({pd.Timestamp(x["date"][:10]): float(x["close"]) for x in b})
+        cols[dev] = s / 100.0 if dev == "GBX" else s
+    fx = pd.DataFrame(cols).sort_index()
+    fx["EUR"] = 1.0
+    return fx
+
+
+def charger_panel(min_seances: int = 500,
+                  devises: tuple[str, ...] = TARGET_DEVISES) -> pd.DataFrame:
+    """Recolle les lots en un panel long, biais de survivance traité + hygiène.
+
+    Hygiène (motivée empiriquement) :
     - **prix strictement positifs** : un `adj_close`/`close` <= 0 fait exploser
-      `pct_change` (rendements `inf` / milliards de %). ~6 000 cellules concernées.
+      `pct_change` (rendements `inf` / milliards de %). ~6 000 cellules.
+    - **conversion EUR** des prix et de la liquidité via `taux_change` (dont GBX
+      pence → GBP/100) : rend le plancher de prix et le filtre de liquidité
+      cohérents entre devises. Colonnes ajoutées `prix_eur`, `dvol_eur`.
+      `adj_close` reste LOCAL → les rendements (le signal) sont des rendements
+      totaux locaux ; la P&L réelle en euros porterait aussi le change (overlay
+      FX, non modélisé ici — connu).
+    - `devises` par défaut = zone euro + Londres/Suisse/Nordiques (GBX/GBP/CHF/
+      SEK/DKK/NOK). Passer `("EUR",)` pour revenir à la v1 zone euro.
     """
     fichiers = sorted(DOSSIER.glob("lot_*.parquet"))
     if not fichiers:
@@ -285,12 +314,23 @@ def charger_panel(min_seances: int = 500,
     p = p.dropna(subset=["adj_close"])
     p = p[p["currency"].isin(devises)]
     p = p[(p["adj_close"] > 0) & (p["close"] > 0)]
+
+    # facteur EUR par (date, devise), FX reporté sur toutes les séances du panel
+    fx = taux_change(devises)
+    dates = pd.Index(sorted(p["date"].unique()))
+    fx = fx.reindex(dates).ffill().bfill()
+    fxl = fx.reset_index(names="date").melt(
+        id_vars="date", var_name="currency", value_name="factor")
+    p = p.merge(fxl, on=["date", "currency"], how="left").dropna(subset=["factor"])
+    p["prix_eur"] = p["close"] * p["factor"]
+    p["dvol_eur"] = p["prix_eur"] * p["volume"]
+
     p = p.drop_duplicates(["ticker", "date"])
     p = decouper_trous(p)
     p = p[p.groupby("ticker")["date"].transform("size") >= min_seances]
     p.attrs["survivants_seulement"] = False
-    p.attrs["source"] = (f"eodhd (radiés servis, flatline tronquée, "
-                         f"devises={'+'.join(devises)}, prix>0)")
+    p.attrs["source"] = (f"eodhd (radiés servis, flatline tronquée, prix>0, "
+                         f"EUR via FX, devises={'+'.join(devises)})")
     return p.sort_values(["ticker", "date"]).reset_index(drop=True)
 
 
