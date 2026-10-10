@@ -1,0 +1,68 @@
+# Environnement virtuel
+venv/
+
+# Credentials — NE JAMAIS COMMITTER
+.env
+
+# Données et sorties de backtest — rien dans data/ n'est versionné
+# (CSV historiques, graphiques d'equity, exports trades.csv…)
+# `data/*` et non `data/` : avec la seconde forme git n'entre jamais dans le
+# dossier, et aucune ré-inclusion n'est possible ensuite.
+data/*
+
+# SAUF la liste des candidats du robot actions : 2 287 symboles publics,
+# 21 ko, aucun secret — et le seul fichier dont une machine neuve a besoin
+# sans pouvoir le reconstruire, puisque `--univers` exige le panel Tiingo de
+# 1,2 Go, qui lui n'a rien à faire dans un dépôt.
+!data/actions/
+data/actions/*
+!data/actions/univers_robot.json
+# robot_etat.json reste dehors, délibérément : c'est la mémoire des tranches,
+# propre à la machine qui envoie. Versionné, il produirait des conflits de
+# fusion sur l'objet le plus critique du robot.
+
+# Logs — jamais committés : ils contiennent l'historique de trading réel
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Reports temporaires
+sync_pending_report.md
+
+# Livres sources — ouvrages sous droits d'auteur, et lourds (~64 Mo).
+# Seules les notes .md qui en sont tirées sont versionnées.
+*.pdf
+references/**/*.csv
+references/**/*.txt
+
+# Config Claude : SEULE la partie trading est versionnée ici.
+# Tout le volet XSIAM/XSOAR (client, hors projet) reste dans ~/.claude
+# et ne doit jamais atterrir dans ce dépôt.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/trading-bot/
+
+# transcript de live analysé ponctuellement — pas du code, pas versionné
+trading-en-live-*.txt
+
+# jetons déposés en clair à la racine — ne jamais versionner
+tiingotoken.txt
+*token*.txt
+*key*.txt
+*secret*.txt
+
+# captures d'écran de consoles courtier déposées à la racine
+*.jpg
+*.jpeg
+*.png

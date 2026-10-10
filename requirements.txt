@@ -1,0 +1,5 @@
+# Dépendances du backtest actions EU. Les appels HTTP (EODHD) passent par urllib
+# de la bibliothèque standard, volontairement — pas de dépendance réseau tierce.
+pandas
+numpy
+pyarrow
