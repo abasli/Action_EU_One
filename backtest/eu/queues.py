@@ -39,6 +39,7 @@ import numpy as np
 import pandas as pd
 
 import signaux as S
+import couts as K
 
 warnings.filterwarnings("ignore")
 
@@ -439,7 +440,6 @@ def main() -> None:
     o = a.parse_args()
 
     import eodhd as SRC
-    import couts as K
     panel = SRC.charger_panel(min_seances=o.min_seances)
     m = S.en_matrices(panel)
     # masque des noms soumis à la TTF française (émetteur FR via ISIN + capi

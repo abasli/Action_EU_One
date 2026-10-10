@@ -38,9 +38,14 @@ CACHE = RACINE / "data" / "eu" / "annuaire"
 # PA Paris · XETRA Allemagne · AS Amsterdam · LSE Londres · BR Bruxelles · LS Lisbonne
 # MC Madrid · SW Suisse (SIX) · ST Stockholm · CO Copenhague · OL Oslo · HE Helsinki
 # VI Vienne · IR Dublin.
-# TROU CONNU : Borsa Italiana / Milan n'existe PAS dans les 70 places EODHD
-# (aucune Italie) → ENI, Enel, Intesa… absents. À combler plus tard par une autre
-# route si l'univers doit être complet au sens STOXX 600.
+# ITALIE — gap assumé. Borsa Italiana (Euronext Milan, code MI) EST couverte par
+# EODHD, mais sur un HÔTE séparé `cboe.eodhd.com` (même clé), avec deux blocages
+# rédhibitoires pour notre méthode (confirmés par le support EODHD, 2026-10) :
+#   (1) volume renvoyé à 0 pour les titres italiens → dollar_vol = 0 → ils échouent
+#       tous le filtre de liquidité et ne sont JAMAIS sélectionnés en queue extrême ;
+#   (2) radiés italiens NON servis → biais de survivance sur la tranche italienne.
+# On les exclut donc jusqu'à ce qu'EODHD corrige volumes ET radiés. Revisiter alors
+# (il faudrait alors router les symboles .MI vers cboe.eodhd.com dans eodhd._get).
 BOURSES_EU = ["PA", "XETRA", "AS", "LSE", "BR", "LS", "MC", "SW",
               "ST", "CO", "OL", "HE", "VI", "IR"]
 
