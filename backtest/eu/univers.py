@@ -34,11 +34,14 @@ from eodhd import _get, RACINE
 
 CACHE = RACINE / "data" / "eu" / "annuaire"
 
-# Places EU couvertes (codes EODHD présumés — à confirmer via exchanges_list()).
-# PA Paris · XETRA Allemagne · AS Amsterdam · MI Milan · LSE Londres · BR Bruxelles
-# LS Lisbonne · MC Madrid · SW Suisse (SIX) · ST Stockholm · CO Copenhague
-# OL Oslo · HE Helsinki · VI Vienne · IR Dublin
-BOURSES_EU = ["PA", "XETRA", "AS", "MI", "LSE", "BR", "LS", "MC", "SW",
+# Places EU couvertes (codes EODHD, confirmés via exchanges_list, 2026-10).
+# PA Paris · XETRA Allemagne · AS Amsterdam · LSE Londres · BR Bruxelles · LS Lisbonne
+# MC Madrid · SW Suisse (SIX) · ST Stockholm · CO Copenhague · OL Oslo · HE Helsinki
+# VI Vienne · IR Dublin.
+# TROU CONNU : Borsa Italiana / Milan n'existe PAS dans les 70 places EODHD
+# (aucune Italie) → ENI, Enel, Intesa… absents. À combler plus tard par une autre
+# route si l'univers doit être complet au sens STOXX 600.
+BOURSES_EU = ["PA", "XETRA", "AS", "LSE", "BR", "LS", "MC", "SW",
               "ST", "CO", "OL", "HE", "VI", "IR"]
 
 TYPES_ACTION = {"common stock", "stock"}
