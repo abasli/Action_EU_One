@@ -33,8 +33,11 @@ Usage :
 from __future__ import annotations
 
 import argparse
+import sys
 import warnings
 from datetime import datetime
+
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -550,6 +553,18 @@ def main() -> None:
     # 2e passe avait effacé 1 230 symboles (mémoire
     # `feedback_lots_compteur_ecrase`), et le correctif est le même.
     # `queues.csv` reste donc le résultat FIGÉ du 2026-10-10, à ne pas écraser.
+    (SRC.RACINE / "data" / "eu").mkdir(parents=True, exist_ok=True)
+    # La commande EN COLONNE, et non en en-tête commenté : un `#` en
+    # première ligne casse un `read_csv` naïf, une colonne ne casse rien.
+    # Sans elle un fichier de sortie ne documente pas ce qui l'a produit —
+    # Un fichier de sortie qui ne dit pas quelle commande l'a produit
+    # coûte des heures : le 2026-10-16, faute de cette colonne, retrouver la
+    # configuration du verdict du 10 octobre a demandé quatre exécutions du
+    # panel et une fausse piste (« le CSV n'est pas reproductible » — il
+    # l'était, à n=5 ; voir RESULTATS.md, piège de lecture sur `n_lignes`).
+    r["genere"] = datetime.now().isoformat(timespec="seconds")
+    r["commande"] = " ".join([Path(sys.argv[0]).name, *sys.argv[1:]])
+
     (SRC.RACINE / "data" / "eu").mkdir(parents=True, exist_ok=True)
     nom = f"queues_{datetime.now():%Y-%m-%d_%H%M%S}.csv"
     r.to_csv(SRC.RACINE / "data" / "eu" / nom, index=False)

@@ -56,7 +56,10 @@ import queues as Q                                             # noqa: E402
 import signaux as S                                            # noqa: E402
 
 SIGNAL = "reversal_21j"
-N, H, PAS, DELAI = 15, 15, 5, 1
+# n=5 est le réglage du verdict EU figé. Piège de lecture : la colonne
+# `n_lignes` de `data/eu/queues.csv` n'est pas 2n mais la TAILLE DU LIVRE,
+# `2*n*h//pas` (écrasée dans `queues.main`), donc 30 lignes = n=5.
+N, H, PAS, DELAI = 5, 15, 5, 1
 COUT_PB = 5.0
 STOPS = (None, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0)
 
@@ -177,6 +180,8 @@ def main() -> None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--stops", type=float, nargs="+")
+    a.add_argument("--n", type=int, default=N,
+                   help="lignes par jambe (5 = le réglage du verdict figé)")
     a.add_argument("--min-seances", type=int, default=1000)
     a.add_argument("--liquide-partout", action="store_true")
     a.add_argument("--annees", action="store_true")
@@ -198,7 +203,8 @@ def main() -> None:
     sig = S.construire_signaux(m)[SIGNAL].to_numpy()
     print(f"\npanel chargé en {time.time() - t0:.0f} s")
 
-    hauts, bas = Q.selectionner(sig, el_long, el_court, N)
+    n = o.n
+    hauts, bas = Q.selectionner(sig, el_long, el_court, n)
 
     # --------------------------------------------------- contrôle du témoin
     b0, e0, a0 = Q.portefeuille(hauts, bas, rdt, H, pond=None, delai=DELAI,
@@ -219,7 +225,7 @@ def main() -> None:
         raise SystemExit("\nLe témoin ne reproduit pas queues.py : "
                          "rien d'autre n'est lisible.")
 
-    ref = Q.mesurer(SIGNAL, b0, e0, dates, H, N, K.TTF_TAUX * a0)
+    ref = Q.mesurer(SIGNAL, b0, e0, dates, H, n, K.TTF_TAUX * a0)
     r0 = next(x for x in ref if x["pb"] == 0)
     print(f"  témoin brut {r0['annuel_pct']:+.1f} %/an  t {r0['t_nw']:+.2f}  "
           f"{r0['jours']} jours\n  (référence figée du 2026-10-10 : "
@@ -235,7 +241,7 @@ def main() -> None:
                                            delai=DELAI, pas=PAS,
                                            taxable=taxable)
         ttf = K.TTF_TAUX * atx
-        lignes = Q.mesurer("x", brut, ech, dates, H, N, ttf)
+        lignes = Q.mesurer("x", brut, ech, dates, H, n, ttf)
         if not lignes:
             print(f"{str(st):>7}  série trop courte")
             continue

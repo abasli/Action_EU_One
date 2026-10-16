@@ -47,21 +47,24 @@ Le panel EU a servi une deuxième fois, pour une question qui n'est pas la sienn
 Côté US (`Actions_US_One`), un **stop à 20 % de perte sur la ligne** affichait
 +3,9 points de rendement annuel — pour un t d'écart apparié de 0,89 contre un seuil
 de 3, et un balayage non monotone. Donc probablement un creux de bruit, mais il
-fallait un autre échantillon pour le dire. Mesuré ici par **`backtest/eu/sortie_stop.py`**,
-n=15 h=15 pas=5 delai=1, net 5 pb/jambe, TTF payée.
+fallait un autre échantillon pour le dire. Mesuré ici par **`backtest/eu/sortie_stop.py`**
+aux conventions du verdict — **n=5** h=15 pas=5 delai=1, net 5 pb/jambe, TTF payée.
 
 | stop | 10 % | 15 % | 20 % | 25 % | 30 % | 40 % |
 |---|---|---|---|---|---|---|
-| écart vs témoin (pt/an) | −0,7 | −1,2 | −1,4 | −2,2 | −2,9 | −2,9 |
-| t de l'écart | −0,20 | −0,45 | −0,67 | −1,24 | −1,78 | −1,92 |
+| écart vs témoin (pt/an) | **+1,4** | −4,0 | **−6,9** | −8,6 | −9,6 | −9,5 |
+| t de l'écart | 0,20 | −0,64 | −1,26 | −1,77 | −2,16 | −2,20 |
 
-**Les six aggravent la perte, et d'autant plus que le stop est large** — balayage
-monotone, signe INVERSE de celui des États-Unis. Un mécanisme réel ne change pas de
-signe d'un continent à l'autre. Insensible à l'univers : −1,4 par défaut, −1,5 en
-`--liquide-partout`.
+**Cinq stops sur six aggravent la perte, et d'autant plus qu'ils sont larges** —
+balayage monotone au-delà de 10 %, signe INVERSE de celui des États-Unis, où les sept
+candidats étaient positifs. Un mécanisme réel ne change pas de signe d'un continent à
+l'autre. Seul 10 % ressort positif, à t=0,20, c'est-à-dire rien.
 
-Témoin contrôlé contre `queues.portefeuille` : écart max **0,00e+00** sur les trois
-séries (brut, échange, TTF), même motif de NaN. Le script refuse de continuer sinon.
+**Témoin doublement contrôlé.** Contre `queues.portefeuille` sur les mêmes entrées :
+écart max **0,00e+00** sur les trois séries (brut, échange, TTF), même motif de NaN —
+le script refuse de continuer sinon. Et contre le CSV figé du 2026-10-10 :
+−21,9 %/an, t −1,40, **1 128 jours**, rotation 26,3 %, TTF 0,96 % — les cinq valeurs
+retrouvées. Le verdict EU est donc bien reproductible.
 
 **Ce qui borne la portée de cette contre-épreuve** — à répéter avec le résultat :
 - `reversal_21j` étant mort en EU, on mesure « le stop réduit-il une perte », pas
@@ -72,30 +75,39 @@ séries (brut, échange, TTF), même motif de NaN. Le script refuse de continuer
   (cohérence avec `couts.py`, qui ne taxe que les ouvertures), ce qui **flatte** le
   stop : −1,4 est une borne haute.
 
-### ⚠️ Le chiffre figé du 10 octobre n'est pas reproductible en l'état
+### ⚠️ `n_lignes` n'est pas `2n` — piège de lecture, une heure perdue
 
-En construisant le témoin, impossible de retrouver la ligne `reversal_21j` du CSV
-(−21,9 %/an, t −1,40, 1 128 jours, rotation 26,3 %, TTF 0,96 %) :
+La colonne `n_lignes` de `data/eu/queues.csv` **n'est pas le nombre de lignes par
+jambe**. `mesurer()` y écrit bien `2*n`, mais `main()` l'ÉCRASE à la ligne 517 par la
+taille réelle du livre, `2*n*h//pas`. La ligne du verdict porte donc `n_lignes = 30`
+pour **n = 5** (2×5×15/5 = 30), pas pour n=15.
+
+Lu comme `2n`, ça donne n=15 — et la contre-épreuve du stop a d'abord été tournée
+entièrement sur un livre de 90 lignes au lieu de 30, avec pour conséquence un témoin
+à −11,2 %/an au lieu de −21,9 % et la fausse conclusion que le verdict figé n'était
+pas reproductible. Il l'est, exactement. Pour mémoire, les trois configurations :
 
 | | brut %/an | t | jours | rotation | TTF |
 |---|---|---|---|---|---|
-| CSV du 2026-10-10 | −21,9 % | −1,40 | 1 128 | 26,3 % | 0,96 % |
-| univers par défaut | −11,2 % | −1,02 | 1 132 | 25,1 % | 1,08 % |
-| `--liquide-partout` | −7,9 % | −0,78 | 1 132 | 24,9 % | 1,14 % |
+| **n=5** (le verdict) | **−21,9 %** | **−1,40** | **1 128** | 26,3 % | 0,96 % |
+| n=15 | −11,2 % | −1,02 | 1 132 | 25,1 % | 1,08 % |
+| n=15 `--liquide-partout` | −7,9 % | −0,78 | 1 132 | 24,9 % | 1,14 % |
 
-Le drapeau **éloigne** du chiffre figé, et l'écart porte aussi sur la rotation et
-l'assiette TTF : c'est donc l'UNIVERS qui diffère, pas une convention de calcul.
-**Les arguments de ligne de commande qui ont produit ce CSV ne sont écrits nulle
-part** — « relancer `queues.py` sur le panel en cache » ne suffit pas à le refaire.
-Le verdict NO-GO n'est pas remis en cause (il tient sur 3 signaux × 2 univers, et
-`reversal_21j` est négatif dans les trois mesures ci-dessus), mais son détail chiffré
-n'est pas vérifiable tant que ces arguments ne sont pas retrouvés.
+`RESULTATS.md` disait « queue extrême n=5 » depuis le début. **La prose était juste,
+c'est la lecture du CSV qui était fausse.** Deux correctifs en sont sortis, tous deux
+utiles indépendamment de l'erreur :
 
-⚠️ **`queues.py:545` écrit `data/eu/queues.csv` sans condition** : chaque `main()`
-REMPLACE le fichier par les lignes de son propre run. `data/*` étant gitignoré, il
-n'y a ni historique ni récupération — un run partiel détruirait le détail du verdict.
-Même motif que la note `feedback_lots_compteur_ecrase` du projet US (une 2e passe
-avait effacé 1 230 symboles) et même correctif : **horodater le nom de sortie**.
+1. ⚠️ **`queues.py` écrivait `data/eu/queues.csv` sans condition** : chaque `main()`
+   REMPLAÇAIT le fichier par les lignes de son propre run. `data/*` étant gitignoré,
+   il n'y avait ni historique ni récupération — un run partiel aurait détruit le
+   détail du verdict. La sortie est désormais **horodatée**, et `queues.csv` reste le
+   résultat figé du 10 octobre. Même motif et même correctif que la note
+   `feedback_lots_compteur_ecrase` du projet US (une 2e passe y avait effacé 1 230
+   symboles).
+2. **Chaque ligne de sortie porte maintenant sa commande** (colonnes `genere` et
+   `commande`). Une colonne et non un en-tête `#`, qui casserait un `read_csv` naïf.
+   C'est le remède à ce qui s'est réellement passé : une heure passée à chercher des
+   arguments qu'une colonne `commande` aurait donnés en deux secondes.
 
 ### Ne pas refaire sans élément neuf
 Re-tester cette famille (reversal/momentum en queue extrême) en Europe n'a de sens que si :
