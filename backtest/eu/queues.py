@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import warnings
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -541,9 +542,18 @@ def main() -> None:
     print("alors le gain à zéro — le chiffre qui décide tant que le courtier n'est pas")
     print("choisi : en dessous de ~5 pb/jambe, aucune exécution retail ne tient.")
 
+    # Sortie HORODATÉE, et non un nom fixe. Ce fichier est la seule preuve
+    # chiffrée d'un verdict, `data/*` est gitignoré : il n'y a ni historique
+    # git ni corbeille. Un run partiel sur un nom fixe — un seul signal, un
+    # seul h — remplacerait silencieusement le détail complet par quatre
+    # lignes. C'est exactement ce qui est arrivé à `edgar.py` côté US, où une
+    # 2e passe avait effacé 1 230 symboles (mémoire
+    # `feedback_lots_compteur_ecrase`), et le correctif est le même.
+    # `queues.csv` reste donc le résultat FIGÉ du 2026-10-10, à ne pas écraser.
     (SRC.RACINE / "data" / "eu").mkdir(parents=True, exist_ok=True)
-    r.to_csv(SRC.RACINE / "data" / "eu" / "queues.csv", index=False)
-    print(f"\ndétail -> data/eu/queues.csv")
+    nom = f"queues_{datetime.now():%Y-%m-%d_%H%M%S}.csv"
+    r.to_csv(SRC.RACINE / "data" / "eu" / nom, index=False)
+    print(f"\ndétail -> data/eu/{nom}")
 
 
 if __name__ == "__main__":
